@@ -13,58 +13,42 @@ function fetch_json($url) {
     return $data;
 }
 
-// Function to make HTTP requests with custom headers
-function fetch_with_headers($url, $headers) {
-    $http_headers = [];
-    foreach ($headers as $key => $value) {
-        $http_headers[] = "$key: $value";
+// Function to generate M3U8 playlist format
+function generate_m3u8_entry($channel) {
+    $name = $channel['name'] ?? 'Unknown Channel';
+    $logo = $channel['tvg-logo'] ?? '';
+    $link = $channel['link'] ?? '';
+    $headers = $channel['headers'] ?? [];
+
+    if (!$link || empty($headers)) {
+        return ""; // Skip invalid channels
     }
 
-    $options = [
-        'http' => [
-            'header' => implode("\r\n", $http_headers),
-            'method' => 'GET'
-        ]
-    ];
+    $user_agent = $headers['user-agent'] ?? '';
+    $http_headers = json_encode($headers, JSON_UNESCAPED_SLASHES);
 
-    $context = stream_context_create($options);
-    $response = file_get_contents($url, false, $context);
-
-    if ($response === FALSE) {
-        return "Error fetching data from: $url\n";
-    }
-
-    return $response;
+    return "#EXTINF:-1 group-title=\"LIVE\" tvg-chno=\"\" tvg-id=\"\" tvg-logo=\"$logo\", $name\n" .
+           "#EXTVLCOPT:http-user-agent=$user_agent\n" .
+           "#EXTHTTP:$http_headers\n" .
+           "$link\n";
 }
 
 // Main script execution
 $json_url = 'https://raw.githubusercontent.com/Jeshan-akand/Toffee-Channels-Link-Headers/main/toffee_channel_data.json';
 $data = fetch_json($json_url);
 
-$name = $data['name'] ?? 'Unknown';
-$owner = $data['owner'] ?? 'Unknown';
-$channels_amount = $data['channels_amount'] ?? 0;
 $channels_data = $data['channels'] ?? [];
-
-echo "Application Name: $name\n";
-echo "Owner: $owner\n";
-echo "Total Channels: $channels_amount\n\n";
+$output = "";
 
 foreach ($channels_data as $channel) {
-    $link = $channel['link'] ?? null;
-    $headers = $channel['headers'] ?? [];
-
-    if ($link === null || empty($headers)) {
-        echo "Invalid channel data. Skipping...\n";
-        continue;
+    $entry = generate_m3u8_entry($channel);
+    if (!empty($entry)) {
+        $output .= $entry . "\n";
     }
-
-    echo "✓ Channel Link: $link\n";
-    echo "✓ Channel Headers: " . print_r($headers, true) . "\n";
-
-    $response = fetch_with_headers($link, $headers);
-
-    echo "✓ Response From Toffee Server:\n$response\n\n";
 }
+
+// Output the M3U8 playlist
+header('Content-Type: text/plain');
+echo $output;
 
 ?>
