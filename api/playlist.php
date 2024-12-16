@@ -1,54 +1,51 @@
 <?php
+// Fetch the JSON data from the URL
+$json_url = "https://raw.githubusercontent.com/byte-capsule/Toffee-Channels-Link-Headers/refs/heads/main/toffee_channel_data.json";
+$json_data = file_get_contents($json_url);
 
-// Function to fetch JSON data from a URL
-function fetch_json($url) {
-    $response = file_get_contents($url);
-    if ($response === FALSE) {
-        die("Error fetching JSON data from: $url\n");
-    }
-    $data = json_decode($response, true);
-    if ($data === NULL) {
-        die("Error decoding JSON data.\n");
-    }
-    return $data;
+// Check if data fetching is successful
+if ($json_data === false) {
+    die("Failed to fetch JSON data.");
 }
 
-// Function to generate M3U8 playlist format
-function generate_m3u8_entry($channel) {
-    $name = $channel['name'] ?? 'Unknown Channel';
-    $logo = $channel['tvg-logo'] ?? '';
-    $link = $channel['link'] ?? '';
-    $headers = $channel['headers'] ?? [];
+// Decode the JSON data into an associative array
+$channels = json_decode($json_data, true);
 
-    if (!$link || empty($headers)) {
-        return ""; // Skip invalid channels
-    }
-
-    $user_agent = $headers['user-agent'] ?? '';
-    $http_headers = json_encode($headers, JSON_UNESCAPED_SLASHES);
-
-    return "#EXTINF:-1 group-title=\"LIVE\" tvg-chno=\"\" tvg-id=\"\" tvg-logo=\"$logo\", $name\n" .
-           "#EXTVLCOPT:http-user-agent=$user_agent\n" .
-           "#EXTHTTP:$http_headers\n" .
-           "$link\n";
+// Check if decoding is successful
+if (json_last_error() !== JSON_ERROR_NONE) {
+    die("Error decoding JSON: " . json_last_error_msg());
 }
 
-// Main script execution
-$json_url = 'https://raw.githubusercontent.com/Jeshan-akand/Toffee-Channels-Link-Headers/main/toffee_channel_data.json';
-$data = fetch_json($json_url);
-
-$channels_data = $data['channels'] ?? [];
-$output = "";
-
-foreach ($channels_data as $channel) {
-    $entry = generate_m3u8_entry($channel);
-    if (!empty($entry)) {
-        $output .= $entry . "\n";
-    }
-}
-
-// Output the M3U8 playlist
+// Start building the playlist
 header('Content-Type: text/plain');
-echo $output;
+echo "#EXTM3U\n";
 
-?>
+// Loop through the channels and build the playlist entries
+foreach ($channels as $channel) {
+    // Extract relevant data
+    $category = $channel['category_name'] ?? "LIVE";
+    $name = $channel['name'] ?? "Unknown Channel";
+    $link = $channel['link'] ?? "";
+    $headers = $channel['headers'] ?? [];
+    $logo = $channel['logo'] ?? ""; // Optional, if available in the JSON
+
+    // Build the #EXTINF line
+    echo "#EXTINF:-1 group-title=\"$category\" tvg-chno=\"\" tvg-id=\"\"";
+    if (!empty($logo)) {
+        echo " tvg-logo=\"$logo\"";
+    }
+    echo ", $name\n";
+
+    // Build the #EXTVLCOPT lines
+    if (!empty($headers)) {
+        if (isset($headers['user-agent'])) {
+            echo "#EXTVLCOPT:http-user-agent={$headers['user-agent']}\n";
+        }
+        if (isset($headers['cookie'])) {
+            echo "#EXTHTTP:{\"cookie\":\"{$headers['cookie']}\"}\n";
+        }
+    }
+
+    // Add the link
+    echo "$link\n";
+}
